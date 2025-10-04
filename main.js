@@ -31,6 +31,14 @@ const db = getFirestore(app);
 const pings = {};
 const ccus = {};
 
+function filterByRange(data, rangeInSeconds) {
+    const now = Math.floor(Date.now() / 1000);
+    const cutoff = now - rangeInSeconds;
+    return Object.fromEntries(
+        Object.entries(data).filter(([ts, val]) => ts >= cutoff)
+    );
+}
+
 async function getPings() {
     const pingRef = collection(db, "ping");
     const snapshot = await getDocs(pingRef);
@@ -57,19 +65,38 @@ async function getCCUs() {
     });
 }
 
-async function buildCharts() {
+let pingChart = null;
+let ccuChart = null;
+
+async function buildCharts(range = "day") {
     await getPings();
     await getCCUs();
+    
+    if (pingChart) pingChart.destroy();
+    if (ccuChart) ccuChart.destroy();
+
+    const ranges = {
+        hour: 60*60,
+        sixHours: 60*60*6,
+        day: 60*60*24,
+        threeDays: 60*60*24*3,
+        week: 60*60*24*7,
+        month: 60*60*24*30
+    };
+
+    const rangeSeconds = ranges[range];
 
     // ----------------------
-    // Ping Chart
+    // Filter Pings
     // ----------------------
-    const pingTimestamps = Object.keys(pings).sort();
+    const filteredPings = filterByRange(pings, rangeSeconds);
+
+    const pingTimestamps = Object.keys(filteredPings).sort();
     const pingLabels = pingTimestamps.map(ts => new Date(ts * 1000).toLocaleTimeString());
-    const apiPing = pingTimestamps.map(ts => pings[ts].apitime);
-    const netPing = pingTimestamps.map(ts => pings[ts].network);
+    const apiPing = pingTimestamps.map(ts => filteredPings[ts].apitime);
+    const netPing = pingTimestamps.map(ts => filteredPings[ts].network);
 
-    new Chart(document.getElementById("pingChart"), {
+    pingChart = new Chart(document.getElementById("pingChart"), {
         type: 'line',
         data: {
             labels: pingLabels,
@@ -82,17 +109,22 @@ async function buildCharts() {
     });
 
     // ----------------------
-    // CCU Chart
+    // Filter CCUs
     // ----------------------
-    const allTimestamps = new Set(Object.values(ccus).flatMap(g => Object.keys(g)));
+    const filteredCCUs = {};
+    for (const [game, gameData] of Object.entries(ccus)) {
+        filteredCCUs[game] = filterByRange(gameData, rangeSeconds);
+    }
+
+    const allTimestamps = new Set(Object.values(filteredCCUs).flatMap(g => Object.keys(g)));
     const sortedTimestamps = Array.from(allTimestamps).sort((a,b)=>a-b);
     const ccuLabels = sortedTimestamps.map(ts => new Date(ts * 1000).toLocaleTimeString());
 
     const ccuDatasets = [];
-    const colors = ['green','orange','purple','cyan','magenta','brown','lime','teal'];
+    const colors = ['darkred', 'yellow', 'green','orange','purple','cyan','magenta','brown','lime','teal'];
     let colorIndex = 0;
 
-    for (const [game, data] of Object.entries(ccus)) {
+    for (const [game, data] of Object.entries(filteredCCUs)) {
         ccuDatasets.push({
             label: game,
             data: sortedTimestamps.map(ts => data[ts] ?? null),
@@ -102,15 +134,30 @@ async function buildCharts() {
         colorIndex++;
     }
 
-    new Chart(document.getElementById("ccuChart"), {
+    ccuChart = new Chart(document.getElementById("ccuChart"), {
         type: 'line',
         data: { labels: ccuLabels, datasets: ccuDatasets },
         options: { responsive: true, maintainAspectRatio: false }
     });
 }
 
-buildCharts();
+document.getElementById('range1h').addEventListener('click', () => {
+    buildCharts("hour");
+});
+document.getElementById('range6h').addEventListener('click', () => {
+    buildCharts("sixHours");
+});
+document.getElementById('range1d').addEventListener('click', () => {
+    buildCharts("day");
+});
+document.getElementById('range3d').addEventListener('click', () => {
+    buildCharts("threeDays");
+});
+document.getElementById('range1w').addEventListener('click', () => {
+    buildCharts("week");
+});
+document.getElementById('range1m').addEventListener('click', () => {
+    buildCharts("month");
+});
 
-setTimeout(() => {
-    window.location.href = window.location.href; // looks stupid but works
-}, 60000);
+buildCharts();

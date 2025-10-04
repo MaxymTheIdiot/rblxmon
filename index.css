@@ -23,3 +23,14 @@ canvas {
     max-width: 800px;         /* optional max width */
     max-height: 400px;        /* optional max height */
 }
+
+.rangeContainer {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-auto-rows: min-content;
+  justify-content: center;
+  align-content: center;
+  justify-items: start;
+  align-items: start;
+  gap: 20px;
+}
