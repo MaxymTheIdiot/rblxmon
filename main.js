@@ -109,5 +109,8 @@ async function buildCharts() {
     });
 }
 
-// Run everything
 buildCharts();
+
+setTimeout(() => {
+    window.location.href = window.location.href; // looks stupid but works
+}, 60000);
